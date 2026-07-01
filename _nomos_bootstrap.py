@@ -24,6 +24,8 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from _nomos_convert_openai import converter_export_openai
+
 OLLAMA_URL   = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "gemma4:e4b"
 
@@ -293,8 +295,14 @@ def extrair_compactados(origem: Path) -> tuple[list[Path], Path | None]:
         try:
             nome_lower = arc.name.lower()
             if nome_lower.endswith(".zip"):
-                with zipfile.ZipFile(arc) as zf:
-                    zf.extractall(dest_arc)
+                # Tenta detectar export OpenAI/ChatGPT primeiro
+                n_conv = converter_export_openai(arc, dest_arc)
+                if n_conv > 0:
+                    log(f"    ✓ {arc.name}  →  {n_conv} conversas ChatGPT convertidas para .md")
+                else:
+                    # Zip genérico — extrai normal
+                    with zipfile.ZipFile(arc) as zf:
+                        zf.extractall(dest_arc)
             elif any(nome_lower.endswith(e) for e in (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")):
                 with tarfile.open(arc) as tf:
                     tf.extractall(dest_arc)
@@ -305,7 +313,8 @@ def extrair_compactados(origem: Path) -> tuple[list[Path], Path | None]:
                 if not f.name.startswith("_") and f.name not in SISTEMA
             ]
             mds.extend(extras)
-            log(f"    ✓ {arc.name}  →  {len(extras)} .md extraídos")
+            if n_conv == 0:
+                log(f"    ✓ {arc.name}  →  {len(extras)} .md extraídos")
         except Exception as e:
             log(f"    ⚠ {arc.name}: {e}")
 
