@@ -59,11 +59,10 @@ On first launch, Nomos detects your hardware and guides you through installing O
 
 ## Fixed folders
 
-Two folders are always created, regardless of what the LLM generates:
+One folder is always created regardless of what the LLM generates:
 
 | Folder | Purpose |
 |--------|---------|
-| `00-Akai-Ito` | Personal relational memories (romantic, affective, intimate) |
 | `35-Lore-Geral` | Catch-all for files with no clear category |
 
 ---

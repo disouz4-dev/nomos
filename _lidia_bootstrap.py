@@ -245,26 +245,6 @@ def criar_lore_geral(dest: Path):
         log("  ✓ 35-Lore-Geral/_sobre_.md")
 
 
-def criar_akai_ito(dest: Path):
-    """Pasta fixa: todas as interações afetivas e românticas com mulheres."""
-    pasta = dest / "00-Akai-Ito"
-    pasta.mkdir(parents=True, exist_ok=True)
-    sobre = pasta / "_sobre_.md"
-    if not sobre.exists():
-        sobre.write_text(
-            "# Akai Ito\n\n"
-            "## Propósito\n\nMemórias e registros de todas as mulheres com quem Diego teve"
-            " algum vínculo afetivo, romântico ou sexual — de encontros casuais a relacionamentos.\n\n"
-            "## O que pertence aqui\n\nConversas, diários, reflexões e memórias sobre mulheres"
-            " com quem Diego ficou, namorou, teve relações sexuais ou foi casado."
-            " Inclui sentimentos, saudades, conflitos e histórias de cada uma.\n\n"
-            "## O que não pertence aqui\n\nAmizades femininas sem vínculo afetivo/romântico."
-            " Relacionamentos profissionais. Memórias familiares.\n",
-            encoding="utf-8"
-        )
-        log("  ✓ 00-Akai-Ito/_sobre_.md  [pasta fixa]")
-
-
 # ── Pipeline principal ────────────────────────────────────────────────────────
 
 def run(origem: Path, destino: Path):
@@ -313,7 +293,6 @@ def run(origem: Path, destino: Path):
     log("  ─── Taxonomia aprovada. Criando pastas agora... ───\n")
 
     destino.mkdir(parents=True, exist_ok=True)
-    criar_akai_ito(destino)
     criar_lore_geral(destino)
 
     for i, cat in enumerate(categorias, 1):

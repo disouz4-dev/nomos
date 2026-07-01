@@ -59,11 +59,10 @@ Na primeira abertura, o Nomos detecta o hardware e guia a instalação do Ollama
 
 ## Pastas fixas
 
-Duas pastas são sempre criadas, independente do que o LLM sugerir:
+Uma pasta é sempre criada, independente do que o LLM sugerir:
 
 | Pasta | Propósito |
 |-------|-----------|
-| `00-Akai-Ito` | Memórias relacionais pessoais (românticas, afetivas, íntimas) |
 | `35-Lore-Geral` | Catch-all para arquivos sem categoria clara |
 
 ---
