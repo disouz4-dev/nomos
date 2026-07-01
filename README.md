@@ -1,6 +1,6 @@
 # Nomos
 
-> *O espírito grego das leis e da organização de estruturas.*
+> *The Greek spirit of law and the organization of structures.*
 
 [Português 🇧🇷](README.pt-br.md) | English
 
@@ -17,7 +17,7 @@ Nomos runs a multi-phase pipeline on your vault:
 | **Bootstrap** | `_lidia_bootstrap.py` | Analyzes **all** your files in batches, generates a taxonomy of folders, then creates the folders only after the full taxonomy is consolidated |
 | **Classify** | `_lidia_embed_classify.py` | Embeds every file and every folder description, assigns each file to the most semantically similar folder |
 | **Links** | `_lidia_links.py` | Creates hub-and-spoke wiki links per folder — each folder gets a central MOC, files link back to it and to similar peers |
-| **Rename** | `_lidia_rename.py` | Renames files with generic names (e.g. "Conversa #123") to descriptive titles |
+| **Rename** | `_lidia_rename.py` | Renames files with generic names (e.g. "Chat #123") to descriptive titles |
 
 The batch size for each phase is detected automatically based on your GPU VRAM and available RAM.
 
@@ -49,9 +49,9 @@ On first launch, Nomos detects your hardware and guides you through installing O
 
 ## Web UI
 
-- **Source / Destino** — pick folders with the built-in file browser
-- **Rodar Tudo** — runs all phases sequentially, server-side, with live log output
-- **Parar** — cancels the current phase cleanly
+- **Source / Destination** — pick folders with the built-in file browser
+- **Run All** — runs all phases sequentially, server-side, with live log output
+- **Stop** — cancels the current phase cleanly
 - **⚙ Config** — manage pipeline settings and download additional Ollama models
 - GPU monitor, folder tree, and live progress displayed on the home screen
 
