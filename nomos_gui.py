@@ -26,7 +26,7 @@ DB_PATH  = POV_PATH / "_lidia_state.db"
 PORT     = 8735
 
 # Padrões de origem/destino padrão
-DEFAULT_ORIGEM  = str(POV_PATH.parent / "Lídia Memory")
+DEFAULT_ORIGEM  = str(Path.home() / "Lídia Memory")
 DEFAULT_DESTINO = str(POV_PATH.parent)
 
 app = FastAPI()
@@ -1608,16 +1608,38 @@ let rodando = false;
 let looping = false;
 let loopFase = "";
 
+const FASE_MAP = {
+  bootstrap: {nome:"Bootstrap", card:"phBootstrap",  idx:0},
+  classify:  {nome:"Classify",  card:"phClassify",   idx:1},
+  links:     {nome:"Links",     card:"phLinks",       idx:2},
+  rename:    {nome:"Rename",    card:"phRename",      idx:3},
+};
+const FASE_ORDEM = ["bootstrap","classify","links","rename"];
+
+function setFaseCard(faseAtiva) {
+  // Acende o número da fase ativa, marca anteriores como done
+  const idxAtivo = FASE_ORDEM.indexOf(faseAtiva);
+  FASE_ORDEM.forEach((f, i) => {
+    const el = document.getElementById(FASE_MAP[f].card);
+    if (!el) return;
+    el.classList.remove("running","done");
+    if (i < idxAtivo)       el.classList.add("done");
+    else if (i === idxAtivo) el.classList.add("running");
+  });
+}
+
 function setRodando(val, fase = "") {
   rodando = val;
   document.getElementById("statusDot").className = "status-dot" + (val ? " ativo" : "");
   document.getElementById("hStatus").textContent = val ? `Rodando: ${fase}` : "Ocioso";
   if (!val) {
-    // Zera todas as barras de fase ao encerrar
-    ["Bootstrap","Classify","Links","Rename"].forEach(n => {
-      const wrap  = document.getElementById("progWrap"  + n);
-      const bar   = document.getElementById("progBar"   + n);
-      const label = document.getElementById("progLabel" + n);
+    // Zera classes e barras ao encerrar
+    FASE_ORDEM.forEach(f => {
+      const el = document.getElementById(FASE_MAP[f].card);
+      if (el) el.classList.remove("running","done");
+      const wrap  = document.getElementById("progWrap"  + FASE_MAP[f].nome);
+      const bar   = document.getElementById("progBar"   + FASE_MAP[f].nome);
+      const label = document.getElementById("progLabel" + FASE_MAP[f].nome);
       if (wrap)  wrap.style.display  = "none";
       if (bar)   bar.style.width     = "0%";
       if (label) label.style.display = "none";
@@ -1626,12 +1648,14 @@ function setRodando(val, fase = "") {
 }
 
 function setFaseProg(fase, pct) {
-  const map = {bootstrap:"Bootstrap", classify:"Classify", links:"Links", rename:"Rename"};
-  const nome = map[fase];
-  if (!nome) return;
-  const wrap  = document.getElementById("progWrap"  + nome);
-  const bar   = document.getElementById("progBar"   + nome);
-  const label = document.getElementById("progLabel" + nome);
+  const info = FASE_MAP[fase];
+  if (!info) return;
+  // Acende número da fase
+  setFaseCard(fase);
+  // Atualiza barra
+  const wrap  = document.getElementById("progWrap"  + info.nome);
+  const bar   = document.getElementById("progBar"   + info.nome);
+  const label = document.getElementById("progLabel" + info.nome);
   if (!wrap) return;
   wrap.style.display  = "";
   bar.style.width     = pct + "%";
@@ -1937,6 +1961,13 @@ async function atualizarGPU() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 (function() {
   const saved = JSON.parse(localStorage.getItem("lidiacfg") || "{}");
+
+  // Corrige path de origem salvo errado (continha /Valt/ no meio)
+  if (saved.origem && saved.origem.includes("/Valt/")) {
+    saved.origem = DEFAULTS.origem;
+    localStorage.setItem("lidiacfg", JSON.stringify(saved));
+  }
+
   const origem  = saved.origem  || DEFAULTS.origem;
   const destino = saved.destino || DEFAULTS.destino;
 

@@ -24,9 +24,9 @@ from pathlib import Path
 
 OLLAMA_URL    = "http://localhost:11434/api/generate"
 OLLAMA_MODEL  = "gemma4:e4b"
-EXCERPT_CHARS = 300   # chars por arquivo
-CATS_PER_BATCH = 5    # categorias candidatas por lote
-FINAL_CATS    = 15    # máximo de categorias na taxonomia final
+EXCERPT_CHARS  = 400   # chars por arquivo
+CATS_PER_BATCH = 8     # categorias candidatas por lote
+FINAL_CATS     = 35    # máximo de categorias na taxonomia final
 
 
 def detectar_batch_size() -> int:
@@ -169,9 +169,9 @@ Muitas podem ser duplicatas, variações do mesmo tema ou se sobrepor.
 ---
 
 Sua tarefa:
-1. Mescle categorias similares ou sobrepostas em uma única categoria bem definida
-2. Mantenha categorias verdadeiramente distintas
-3. O resultado final deve ter entre 10 e {FINAL_CATS} categorias únicas
+1. Mescle categorias APENAS quando forem essencialmente a mesma coisa (ex: "Política" e "Política Brasileira")
+2. Mantenha categorias distintas separadas — prefira granularidade a fusão excessiva
+3. O resultado final deve ter entre 20 e {FINAL_CATS} categorias únicas e bem definidas
 4. Para cada categoria consolidada, reescreva o propósito, pertence e nao_pertence de forma clara
 
 Responda APENAS com um array JSON final. Sem explicações, sem markdown.
