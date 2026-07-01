@@ -294,13 +294,12 @@ def extrair_compactados(origem: Path) -> tuple[list[Path], Path | None]:
         dest_arc.mkdir(parents=True, exist_ok=True)
         try:
             nome_lower = arc.name.lower()
+            n_conv = 0
             if nome_lower.endswith(".zip"):
-                # Tenta detectar export OpenAI/ChatGPT primeiro
                 n_conv = converter_export_openai(arc, dest_arc)
                 if n_conv > 0:
                     log(f"    ✓ {arc.name}  →  {n_conv} conversas ChatGPT convertidas para .md")
                 else:
-                    # Zip genérico — extrai normal
                     with zipfile.ZipFile(arc) as zf:
                         zf.extractall(dest_arc)
             elif any(nome_lower.endswith(e) for e in (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")):
