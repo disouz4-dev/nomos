@@ -113,7 +113,7 @@ def _chamar_llm(prompt: str, timeout: int = 300) -> str:
         "model": OLLAMA_MODEL,
         "prompt": prompt,
         "stream": False,
-        "options": {"temperature": 0.15, "num_ctx": 32768}
+        "options": {"temperature": 0.15, "num_ctx": 65536}
     }
     resp = requests.post(OLLAMA_URL, json=payload, timeout=timeout)
     resp.raise_for_status()
@@ -323,7 +323,7 @@ def extrair_compactados(origem: Path) -> tuple[list[Path], Path | None]:
 # ── Hardware ───────────────────────────────────────────────────────────────────
 
 def detectar_batch_size() -> int:
-    """Quantos arquivos por lote para descrição — limitado pela VRAM disponível."""
+    """Quantos arquivos por lote para descrição — calibrado para saturar a GPU."""
     try:
         out = subprocess.check_output(
             ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
@@ -331,13 +331,13 @@ def detectar_batch_size() -> int:
         ).strip().splitlines()[0]
         vram_free_mb = int(out.strip())
         if vram_free_mb >= 8000:
-            return 15
+            return 40
         elif vram_free_mb >= 5000:
-            return 10
+            return 30
         elif vram_free_mb >= 3000:
-            return 6
+            return 20
         else:
-            return 4
+            return 12
     except Exception:
         pass
     try:
@@ -345,10 +345,10 @@ def detectar_batch_size() -> int:
             for line in f:
                 if line.startswith("MemAvailable"):
                     gb = int(line.split()[1]) / 1024 / 1024
-                    return 10 if gb >= 12 else 6 if gb >= 6 else 4
+                    return 25 if gb >= 12 else 15 if gb >= 6 else 10
     except Exception:
         pass
-    return 6
+    return 20
 
 
 # ── Pipeline ───────────────────────────────────────────────────────────────────
