@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+_lidia_state.db
+*.db
+*.log
+nohup.out
+POV.md
+_lidia_consolidate_rules.md
+_lidia_rules_compact.md
