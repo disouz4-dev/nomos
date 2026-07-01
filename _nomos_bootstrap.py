@@ -44,6 +44,7 @@ def ler_arquivo(path: Path) -> str:
 
 
 def extrair_json(raw: str) -> list:
+    # Tenta blocos de código markdown
     if "```" in raw:
         for parte in raw.split("```"):
             parte = parte.strip().lstrip("json").strip()
@@ -53,14 +54,52 @@ def extrair_json(raw: str) -> list:
                     return r
             except json.JSONDecodeError:
                 continue
+    # Tenta qualquer array JSON na resposta
     inicio = raw.find("[")
-    fim    = raw.rfind("]") + 1
-    if inicio >= 0 and fim > inicio:
-        try:
-            return json.loads(raw[inicio:fim])
-        except Exception:
-            pass
+    while inicio >= 0:
+        fim = raw.rfind("]") + 1
+        if fim > inicio:
+            try:
+                r = json.loads(raw[inicio:fim])
+                if isinstance(r, list) and r:
+                    return r
+            except Exception:
+                pass
+        inicio = raw.find("[", inicio + 1)
+    # Tenta objeto único {}
+    inicio = raw.find("{")
+    if inicio >= 0:
+        fim = raw.rfind("}") + 1
+        if fim > inicio:
+            try:
+                r = json.loads(raw[inicio:fim])
+                if isinstance(r, dict):
+                    return [r]
+            except Exception:
+                pass
     return []
+
+
+def extrair_descricoes_texto(raw: str, nomes: list[str]) -> list[dict]:
+    """Fallback: extrai descrições de texto livre quando o LLM não retornou JSON."""
+    resultado = []
+    linhas = raw.splitlines()
+    for nome in nomes:
+        stem = Path(nome).stem.lower()
+        for linha in linhas:
+            if stem in linha.lower() or nome.lower() in linha.lower():
+                # Remove o nome do arquivo do início da linha se presente
+                desc = re.sub(rf".*?{re.escape(stem)}[^:]*:\s*", "", linha, flags=re.IGNORECASE).strip()
+                desc = re.sub(r"^[-*•\d.)\s]+", "", desc).strip()
+                if len(desc) > 15:
+                    resultado.append({"nome": nome, "descricao": desc})
+                    break
+    # Para arquivos sem match, usa a primeira linha não-vazia do bloco
+    nomes_encontrados = {d["nome"] for d in resultado}
+    for nome in nomes:
+        if nome not in nomes_encontrados:
+            resultado.append({"nome": nome, "descricao": f"Arquivo: {nome}"})
+    return resultado
 
 
 def _chamar_llm(prompt: str, timeout: int = 300) -> str:
@@ -105,7 +144,12 @@ Responda APENAS com um array JSON. Sem explicações, sem markdown.
         resultado = extrair_json(raw)
         if resultado:
             return resultado
-        log(f"    ⚠ Lote {lote_num}: resposta sem JSON válido")
+        # Fallback: tenta extrair pares nome/descrição de texto livre
+        resultado = extrair_descricoes_texto(raw, [nome for nome, _ in arquivos])
+        if resultado:
+            return resultado
+        log(f"    ⚠ Lote {lote_num}: resposta inválida. Primeiros 300 chars:")
+        log(f"    {raw[:300]}")
     except Exception as e:
         log(f"    ⚠ Lote {lote_num}: {e}")
     return []
