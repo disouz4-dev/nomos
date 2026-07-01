@@ -9,7 +9,7 @@ Estratégia:
   4. Cria as pastas SOMENTE após a taxonomia estar pronta
 
 Uso:
-    python _lidia_bootstrap.py --origem /path --destino /path
+    python _nomos_bootstrap.py --origem /path --destino /path
 """
 
 import argparse
@@ -26,9 +26,9 @@ OLLAMA_MODEL = "gemma4:e4b"
 SISTEMA = {
     "_sobre_.md", "POV.md", "_lidia_rules_compact.md",
     "_lidia_consolidate_rules.md", "_lidia_runner.py",
-    "_lidia_consolidate.py", "_lidia_bootstrap.py",
-    "_lidia_embed_classify.py", "_lidia_rename.py",
-    "_lidia_links.py", "nomos_gui.py"
+    "_nomos_consolidate.py", "_nomos_bootstrap.py",
+    "_nomos_classify.py", "_nomos_rename.py",
+    "_nomos_links.py", "nomos_gui.py"
 }
 
 

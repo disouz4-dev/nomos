@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LÍDIA Links — Cria wiki links com nó central por pasta (hub-and-spoke).
+Nomos Links — Cria wiki links com nó central por pasta (hub-and-spoke).
 
 Para cada pasta classificada:
   1. Cria (ou atualiza) um nó central MOC cujo nome é o tema da pasta
@@ -10,8 +10,8 @@ Para cada pasta classificada:
   4. Arquivos com similaridade ≥ threshold também se ligam entre si (spokes)
 
 Uso:
-    python _lidia_links.py --destino /path/vault [--threshold 0.75] [--max-links 5]
-    python _lidia_links.py
+    python _nomos_links.py --destino /path/vault [--threshold 0.75] [--max-links 5]
+    python _nomos_links.py
 """
 
 import argparse
@@ -31,9 +31,9 @@ DEFAULT_MAX_LINKS = 5
 SISTEMA = {
     "_sobre_.md", "POV.md", "_lidia_rules_compact.md",
     "_lidia_consolidate_rules.md", "_lidia_runner.py",
-    "_lidia_consolidate.py", "_lidia_bootstrap.py",
-    "_lidia_embed_classify.py", "_lidia_rename.py",
-    "_lidia_links.py", "nomos_gui.py"
+    "_nomos_consolidate.py", "_nomos_bootstrap.py",
+    "_nomos_classify.py", "_nomos_rename.py",
+    "_nomos_links.py", "nomos_gui.py"
 }
 
 
@@ -213,7 +213,7 @@ def processar_pasta(pasta: Path, threshold: float, max_links: int) -> int:
 
 def run(destino: Path, threshold: float, max_links: int):
     log("=" * 60)
-    log("  LÍDIA Links — Hub-and-spoke por pasta")
+    log("  Nomos Links — Hub-and-spoke por pasta")
     log(f"  Threshold: {threshold}  |  Máx. spokes: {max_links}")
     log("=" * 60)
 
@@ -248,7 +248,7 @@ def run(destino: Path, threshold: float, max_links: int):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="LÍDIA Links")
+    parser = argparse.ArgumentParser(description="Nomos Links")
     parser.add_argument("--destino",   help="Pasta raiz do vault organizado")
     parser.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD)
     parser.add_argument("--max-links", type=int,   default=DEFAULT_MAX_LINKS)

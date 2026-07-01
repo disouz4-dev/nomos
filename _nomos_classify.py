@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-LÍDIA Embed Classify — Classifica arquivos por similaridade de embeddings.
+Nomos Classify — Classifica arquivos por similaridade de embeddings.
 Fase 2 do pipeline. Requer que o bootstrap já tenha criado as pastas.
 
 Uso:
-    python _lidia_embed_classify.py --origem /path --destino /path [--lote N]
-    python _lidia_embed_classify.py  # pergunta interativamente
+    python _nomos_classify.py --origem /path --destino /path [--lote N]
+    python _nomos_classify.py  # pergunta interativamente
 """
 
 import argparse
@@ -17,7 +17,7 @@ from pathlib import Path
 from datetime import datetime
 
 POV_PATH      = Path(__file__).parent
-DB_PATH       = POV_PATH / "_lidia_state.db"
+DB_PATH       = POV_PATH / "_nomos_state.db"
 EMBED_URL     = "http://localhost:11434/api/embeddings"
 EMBED_MODEL   = "nomic-embed-text"
 EMBED_CHARS   = 1200
@@ -26,8 +26,8 @@ DEFAULT_LOTE  = 100
 SISTEMA = {
     "_sobre_.md", "POV.md", "_lidia_rules_compact.md",
     "_lidia_consolidate_rules.md", "_lidia_runner.py",
-    "_lidia_consolidate.py", "_lidia_bootstrap.py",
-    "_lidia_embed_classify.py", "_lidia_rename.py", "nomos_gui.py"
+    "_nomos_consolidate.py", "_nomos_bootstrap.py",
+    "_nomos_classify.py", "_nomos_rename.py", "nomos_gui.py"
 }
 
 
@@ -208,7 +208,7 @@ def classificar(path: Path, pastas: dict) -> tuple[str, Path, float]:
 
 def run(origem: Path, destino: Path, lote: int):
     log("=" * 60)
-    log("  LÍDIA Embed Classify — Classificação por embeddings")
+    log("  Nomos Classify — Classificação por embeddings")
     log("=" * 60)
 
     db_init()
@@ -221,7 +221,7 @@ def run(origem: Path, destino: Path, lote: int):
     pastas = carregar_pastas(destino)
     if not pastas:
         log("  ✗ Nenhuma pasta com _sobre_.md encontrada.")
-        log("  Execute primeiro: python _lidia_bootstrap.py")
+        log("  Execute primeiro: python _nomos_bootstrap.py")
         sys.exit(1)
     log(f"  ✓ {len(pastas)} pastas indexadas\n")
 
@@ -284,7 +284,7 @@ def run(origem: Path, destino: Path, lote: int):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="LÍDIA Embed Classify")
+    parser = argparse.ArgumentParser(description="Nomos Classify")
     parser.add_argument("--origem",  help="Pasta com arquivos brutos")
     parser.add_argument("--destino", help="Pasta de destino organizada")
     parser.add_argument("--lote", type=int, default=DEFAULT_LOTE,

@@ -22,7 +22,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 import uvicorn
 
 POV_PATH = Path(__file__).parent
-DB_PATH  = POV_PATH / "_lidia_state.db"
+DB_PATH  = POV_PATH / "_nomos_state.db"
 PORT     = 8735
 
 # Padrões de origem/destino padrão
@@ -472,7 +472,7 @@ async def run_bootstrap(origem: str = DEFAULT_ORIGEM, destino: str = DEFAULT_DES
                         modelo: str = ""):
     global _fase_ativa
     _fase_ativa = "bootstrap"
-    cmd = [sys.executable, str(POV_PATH / "_lidia_bootstrap.py"),
+    cmd = [sys.executable, str(POV_PATH / "_nomos_bootstrap.py"),
            "--origem", origem, "--destino", destino]
     if modelo:
         cmd += ["--modelo", modelo]
@@ -485,7 +485,7 @@ async def run_classify(origem: str = DEFAULT_ORIGEM, destino: str = DEFAULT_DEST
                        lote: int = 100):
     global _fase_ativa
     _fase_ativa = "classify"
-    cmd = [sys.executable, str(POV_PATH / "_lidia_embed_classify.py"),
+    cmd = [sys.executable, str(POV_PATH / "_nomos_classify.py"),
            "--origem", origem, "--destino", destino, "--lote", str(lote)]
     return StreamingResponse(stream_processo(cmd),
                              media_type="text/event-stream")
@@ -495,7 +495,7 @@ async def run_classify(origem: str = DEFAULT_ORIGEM, destino: str = DEFAULT_DEST
 async def run_rename(destino: str = DEFAULT_DESTINO, lote: int = 20, modelo: str = ""):
     global _fase_ativa
     _fase_ativa = "rename"
-    cmd = [sys.executable, str(POV_PATH / "_lidia_rename.py"),
+    cmd = [sys.executable, str(POV_PATH / "_nomos_rename.py"),
            "--destino", destino, "--lote", str(lote)]
     if modelo:
         cmd += ["--modelo", modelo]
@@ -508,7 +508,7 @@ async def run_links(destino: str = DEFAULT_DESTINO,
                     threshold: float = 0.75, max_links: int = 5):
     global _fase_ativa
     _fase_ativa = "links"
-    cmd = [sys.executable, str(POV_PATH / "_lidia_links.py"),
+    cmd = [sys.executable, str(POV_PATH / "_nomos_links.py"),
            "--destino", destino,
            "--threshold", str(threshold),
            "--max-links", str(max_links)]
@@ -520,7 +520,7 @@ async def run_consolidate(origem: str = DEFAULT_DESTINO, destino: str = DEFAULT_
                           lote: int = 20):
     global _fase_ativa
     _fase_ativa = "consolidate"
-    cmd = [sys.executable, str(POV_PATH / "_lidia_consolidate.py"),
+    cmd = [sys.executable, str(POV_PATH / "_nomos_consolidate.py"),
            "--so-consolidar", "--limite", str(lote)]
     return StreamingResponse(stream_processo(cmd),
                              media_type="text/event-stream")
@@ -628,7 +628,7 @@ async def _stream_tudo(origem: str, destino: str,
         yield emit("═" * 50)
         yield emit("▶ FASE 1 — Bootstrap")
         yield emit("═" * 50)
-        cmd = [sys.executable, str(POV_PATH / "_lidia_bootstrap.py"),
+        cmd = [sys.executable, str(POV_PATH / "_nomos_bootstrap.py"),
                "--origem", origem, "--destino", destino]
         if modelo:
             cmd += ["--modelo", modelo]
@@ -670,7 +670,7 @@ async def _stream_tudo(origem: str, destino: str,
             pct_cl = round(concl / _total_pend_cl * 100)
             yield f"event: fase-prog\ndata: classify:{pct_cl}\n\n"
         yield emit(f"  Rodada {rodada} — {pendentes} pendentes")
-        cmd = [sys.executable, str(POV_PATH / "_lidia_embed_classify.py"),
+        cmd = [sys.executable, str(POV_PATH / "_nomos_classify.py"),
                "--origem", origem, "--destino", destino, "--lote", str(lote_classify)]
         async for chunk in _stream_cmd(cmd):
             yield chunk
@@ -689,7 +689,7 @@ async def _stream_tudo(origem: str, destino: str,
     yield emit("═" * 50)
     yield emit("▶ FASE 3 — Wiki Links (por pasta)")
     yield emit("═" * 50)
-    cmd = [sys.executable, str(POV_PATH / "_lidia_links.py"),
+    cmd = [sys.executable, str(POV_PATH / "_nomos_links.py"),
            "--destino", destino]
     async for chunk in _stream_cmd(cmd):
         yield chunk
@@ -721,7 +721,7 @@ async def _stream_tudo(origem: str, destino: str,
                 yield emit("✅ Rename concluído — sem nomes genéricos.")
                 break
             yield emit(f"  Rodada {rodada} — {len(genericos)} arquivos com nome genérico")
-            cmd = [sys.executable, str(POV_PATH / "_lidia_rename.py"),
+            cmd = [sys.executable, str(POV_PATH / "_nomos_rename.py"),
                    "--destino", destino, "--lote", str(lote_rename)]
             if modelo:
                 cmd += ["--modelo", modelo]
@@ -1403,9 +1403,9 @@ async function baixarModeloSelecionado() {
       document.getElementById("btnBaixarModelo").style.display = "none";
       document.getElementById("btnUsarModelo").style.display   = "";
       appendSetupLog(`✅ ${model} pronto!`);
-      const c = JSON.parse(localStorage.getItem("lidiacfg") || "{}");
+      const c = JSON.parse(localStorage.getItem("nomoscfg") || "{}");
       c.modelo = model;
-      localStorage.setItem("lidiacfg", JSON.stringify(c));
+      localStorage.setItem("nomoscfg", JSON.stringify(c));
       const lbl = document.getElementById("modeloLabel");
       if (lbl) lbl.textContent = model;
       return;
@@ -1442,9 +1442,9 @@ function fecharSetup() {
   // Salva o modelo selecionado antes de fechar
   const radio = document.querySelector('input[name="modelChoice"]:checked');
   if (radio) {
-    const c = JSON.parse(localStorage.getItem("lidiacfg") || "{}");
+    const c = JSON.parse(localStorage.getItem("nomoscfg") || "{}");
     c.modelo = radio.value;
-    localStorage.setItem("lidiacfg", JSON.stringify(c));
+    localStorage.setItem("nomoscfg", JSON.stringify(c));
     const lbl = document.getElementById("modeloLabel");
     if (lbl) lbl.textContent = radio.value;
   }
@@ -1463,7 +1463,7 @@ const DEFAULTS = {
 };
 
 function cfg() {
-  const saved = JSON.parse(localStorage.getItem("lidiacfg") || "{}");
+  const saved = JSON.parse(localStorage.getItem("nomoscfg") || "{}");
   // Lê os campos visíveis como fonte primária
   const origem  = (document.getElementById("inOrigem")  || {}).value || saved.origem  || DEFAULTS.origem;
   const destino = (document.getElementById("inDestino") || {}).value || saved.destino || DEFAULTS.destino;
@@ -1475,7 +1475,7 @@ function cfg() {
 
 function salvarPaths() {
   const c = cfg();
-  localStorage.setItem("lidiacfg", JSON.stringify(c));
+  localStorage.setItem("nomoscfg", JSON.stringify(c));
   atualizarTree();
 }
 
@@ -1558,7 +1558,7 @@ function abrirConfig() {
 }
 function fecharConfig() { document.getElementById("modalBg").classList.remove("open"); }
 function salvarConfig() {
-  localStorage.setItem("lidiacfg", JSON.stringify({
+  localStorage.setItem("nomoscfg", JSON.stringify({
     origem:       document.getElementById("cfgOrigem").value.trim(),
     destino:      document.getElementById("cfgDestino").value.trim(),
     loteClassify: +document.getElementById("cfgLoteClassify").value,
@@ -1960,12 +1960,12 @@ async function atualizarGPU() {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (function() {
-  const saved = JSON.parse(localStorage.getItem("lidiacfg") || "{}");
+  const saved = JSON.parse(localStorage.getItem("nomoscfg") || "{}");
 
   // Corrige path de origem salvo errado (continha /Valt/ no meio)
   if (saved.origem && saved.origem.includes("/Valt/")) {
     saved.origem = DEFAULTS.origem;
-    localStorage.setItem("lidiacfg", JSON.stringify(saved));
+    localStorage.setItem("nomoscfg", JSON.stringify(saved));
   }
 
   const origem  = saved.origem  || DEFAULTS.origem;

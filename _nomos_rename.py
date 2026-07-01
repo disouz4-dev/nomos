@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-LÍDIA Rename — Renomeia arquivos com títulos descritivos via modelo local.
+Nomos Rename — Renomeia arquivos com títulos descritivos via modelo local.
 Fase 3 (opcional) do pipeline. Funciona sobre arquivos já classificados.
 
 Uso:
-    python _lidia_rename.py --destino /path [--lote N]
-    python _lidia_rename.py  # pergunta interativamente
+    python _nomos_rename.py --destino /path [--lote N]
+    python _nomos_rename.py  # pergunta interativamente
 """
 
 import argparse
@@ -17,7 +17,7 @@ from pathlib import Path
 from datetime import datetime
 
 POV_PATH      = Path(__file__).parent
-DB_PATH       = POV_PATH / "_lidia_state.db"
+DB_PATH       = POV_PATH / "_nomos_state.db"
 OLLAMA_URL    = "http://localhost:11434/api/generate"
 OLLAMA_MODEL  = "gemma4:e4b"  # sobrescrito por --modelo
 READ_CHARS    = 1800
@@ -86,7 +86,7 @@ def sanitize(nome: str) -> str:
 
 def run(destino: Path, lote: int):
     log("=" * 60)
-    log("  LÍDIA Rename — Renomeando arquivos")
+    log("  Nomos Rename — Renomeando arquivos")
     log("=" * 60)
 
     # Lista arquivos com nome genérico em toda a pasta destino
@@ -150,7 +150,7 @@ def run(destino: Path, lote: int):
 
 def main():
     global OLLAMA_MODEL
-    parser = argparse.ArgumentParser(description="LÍDIA Rename")
+    parser = argparse.ArgumentParser(description="Nomos Rename")
     parser.add_argument("--destino", help="Pasta com os arquivos organizados")
     parser.add_argument("--lote",   type=int, default=DEFAULT_LOTE)
     parser.add_argument("--modelo", help="Modelo Ollama a usar (ex: gemma3:4b)")

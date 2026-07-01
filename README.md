@@ -14,10 +14,10 @@ Nomos runs a multi-phase pipeline on your vault:
 
 | Phase | Script | What it does |
 |-------|--------|--------------|
-| **Bootstrap** | `_lidia_bootstrap.py` | Analyzes **all** your files in batches, generates a taxonomy of folders, then creates the folders only after the full taxonomy is consolidated |
-| **Classify** | `_lidia_embed_classify.py` | Embeds every file and every folder description, assigns each file to the most semantically similar folder |
-| **Links** | `_lidia_links.py` | Creates hub-and-spoke wiki links per folder — each folder gets a central MOC, files link back to it and to similar peers |
-| **Rename** | `_lidia_rename.py` | Renames files with generic names (e.g. "Chat #123") to descriptive titles |
+| **Bootstrap** | `_nomos_bootstrap.py` | Analyzes **all** your files in batches, generates a taxonomy of folders, then creates the folders only after the full taxonomy is consolidated |
+| **Classify** | `_nomos_classify.py` | Embeds every file and every folder description, assigns each file to the most semantically similar folder |
+| **Links** | `_nomos_links.py` | Creates hub-and-spoke wiki links per folder — each folder gets a central MOC, files link back to it and to similar peers |
+| **Rename** | `_nomos_rename.py` | Renames files with generic names (e.g. "Chat #123") to descriptive titles |
 
 The batch size for each phase is detected automatically based on your GPU VRAM and available RAM.
 

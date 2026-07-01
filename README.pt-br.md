@@ -14,10 +14,10 @@ O Nomos executa um pipeline multi-fase no seu vault:
 
 | Fase | Script | O que faz |
 |------|--------|-----------|
-| **Bootstrap** | `_lidia_bootstrap.py` | Analisa **todos** os arquivos em lotes, gera uma taxonomia de pastas, e só cria as pastas após a taxonomia completa ser consolidada |
-| **Classify** | `_lidia_embed_classify.py` | Embedda cada arquivo e cada descrição de pasta, atribui cada arquivo à pasta semanticamente mais similar |
-| **Links** | `_lidia_links.py` | Cria wiki links hub-and-spoke por pasta — cada pasta ganha um MOC central, os arquivos linkam de volta para ele e para arquivos similares |
-| **Rename** | `_lidia_rename.py` | Renomeia arquivos com nomes genéricos (ex: "Conversa #123") para títulos descritivos |
+| **Bootstrap** | `_nomos_bootstrap.py` | Analisa **todos** os arquivos em lotes, gera uma taxonomia de pastas, e só cria as pastas após a taxonomia completa ser consolidada |
+| **Classify** | `_nomos_classify.py` | Embedda cada arquivo e cada descrição de pasta, atribui cada arquivo à pasta semanticamente mais similar |
+| **Links** | `_nomos_links.py` | Cria wiki links hub-and-spoke por pasta — cada pasta ganha um MOC central, os arquivos linkam de volta para ele e para arquivos similares |
+| **Rename** | `_nomos_rename.py` | Renomeia arquivos com nomes genéricos (ex: "Conversa #123") para títulos descritivos |
 
 O tamanho do lote é detectado automaticamente com base na VRAM da GPU e RAM disponível.
 
