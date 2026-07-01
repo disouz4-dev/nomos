@@ -396,28 +396,49 @@ SISTEMA_NOMES = {
     "POV.md", "_lidia_rules_compact.md", "nomos_gui.py",
     "README.md", "README.pt-br.md",
 }
-SISTEMA_DIRS = {"POV", ".git", ".obsidian", ".trash"}
+SISTEMA_DIRS  = {"POV", ".git", ".obsidian", ".trash"}
+ARCHIVE_EXTS  = (".zip", ".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
 
 
 @app.get("/api/scan")
 def api_scan(origem: str = DEFAULT_ORIGEM, destino: str = DEFAULT_DESTINO):
-    """Conta arquivos reais no filesystem — sem depender do DB."""
-    def contar(pasta: str) -> int:
+    """Conta .md e arquivos compactados no filesystem."""
+    def contar_origem(pasta: str) -> dict:
+        p = Path(pasta).expanduser().resolve()
+        if not p.exists():
+            return {"mds": 0, "archives": 0}
+        mds = 0
+        archives = 0
+        for f in p.rglob("*"):
+            if any(part in SISTEMA_DIRS for part in f.parts):
+                continue
+            if f.is_file():
+                nome = f.name.lower()
+                if nome.endswith(".md") and not f.name.startswith("_") and f.name not in SISTEMA_NOMES:
+                    mds += 1
+                elif any(nome.endswith(e) for e in ARCHIVE_EXTS):
+                    archives += 1
+        return {"mds": mds, "archives": archives}
+
+    def contar_destino(pasta: str) -> int:
         p = Path(pasta).expanduser().resolve()
         if not p.exists():
             return 0
         total = 0
         for f in p.rglob("*.md"):
-            # Ignora pastas de sistema
             if any(part in SISTEMA_DIRS for part in f.parts):
                 continue
             if f.name.startswith("_") or f.name in SISTEMA_NOMES:
                 continue
             total += 1
         return total
+
+    orig = contar_origem(origem)
     return JSONResponse({
-        "origem_total":  contar(origem),
-        "destino_total": contar(destino),
+        "origem_total":    orig["mds"] + orig["archives"],
+        "origem_mds":      orig["mds"],
+        "origem_archives": orig["archives"],
+        "destino_total":   contar_destino(destino),
     })
 
 
@@ -610,12 +631,19 @@ async def _stream_tudo(origem: str, destino: str,
     mds_origem = [f for f in origem_path.rglob("*.md")
                   if not f.name.startswith("_") and f.name not in {
                       "POV.md", "_lidia_rules_compact.md"}]
-    if not mds_origem:
-        yield emit(f"✗ Nenhum arquivo .md encontrado em: {origem}")
-        yield emit("  Verifique se a pasta SOURCE está correta.")
+    archives_origem = [f for f in origem_path.rglob("*")
+                       if f.is_file() and any(
+                           f.name.lower().endswith(e)
+                           for e in (".zip", ".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar"))]
+    if not mds_origem and not archives_origem:
+        yield emit(f"✗ SOURCE vazio: {origem}")
+        yield emit("  Precisa ter arquivos .md ou compactados (.zip, .tar.gz).")
         yield "data: [DONE]\n\n"
         return
-    yield emit(f"  ✓ {len(mds_origem)} arquivos .md encontrados na origem")
+    resumo = []
+    if mds_origem:    resumo.append(f"{len(mds_origem)} .md")
+    if archives_origem: resumo.append(f"{len(archives_origem)} arquivo(s) compactado(s)")
+    yield emit(f"  ✓ SOURCE: {', '.join(resumo)}")
     yield emit("")
 
     dest_path = Path(destino)
@@ -1682,10 +1710,11 @@ async function preflightCheck(fase) {
     try {
       const r    = await fetch(`/api/scan?origem=${encodeURIComponent(c.origem)}&destino=${encodeURIComponent(c.destino)}`);
       const scan = await r.json();
-      if ((scan.origem_total ?? 0) === 0) {
+      const temConteudo = (scan.origem_mds ?? 0) + (scan.origem_archives ?? 0);
+      if (temConteudo === 0) {
         addLog("✗ A pasta SOURCE está vazia ou não existe.");
-        addLog(`  Caminho configurado: ${c.origem}`);
-        addLog("  Corrija o SOURCE antes de rodar o pipeline.");
+        addLog(`  Caminho: ${c.origem}`);
+        addLog("  Precisa ter arquivos .md ou .zip com conversas.");
         return false;
       }
     } catch(e) {
@@ -1706,7 +1735,10 @@ async function atualizarStats() {
     // Dados reais do filesystem
     const rScan = await fetch(`/api/scan?origem=${encodeURIComponent(c.origem)}&destino=${encodeURIComponent(c.destino)}`);
     const scan  = await rScan.json();
-    document.getElementById("sOrigem").textContent  = (scan.origem_total  ?? 0).toLocaleString();
+    const mds = scan.origem_mds ?? scan.origem_total ?? 0;
+    const arcs = scan.origem_archives ?? 0;
+    document.getElementById("sOrigem").textContent =
+      arcs > 0 ? `${mds} md + ${arcs} zip` : mds.toLocaleString();
     document.getElementById("sDestino").textContent = (scan.destino_total ?? 0).toLocaleString();
 
     // Progresso do DB — só mostra se o pipeline estiver rodando ou tiver dados ativos
