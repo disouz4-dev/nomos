@@ -26,7 +26,6 @@ OLLAMA_URL    = "http://localhost:11434/api/generate"
 OLLAMA_MODEL  = "gemma4:e4b"
 EXCERPT_CHARS  = 400   # chars por arquivo
 CATS_PER_BATCH = 8     # categorias candidatas por lote
-FINAL_CATS     = 35    # máximo de categorias na taxonomia final
 
 
 def detectar_batch_size() -> int:
@@ -162,17 +161,16 @@ def consolidar(candidatos: list[dict]) -> list[dict]:
     candidatos_txt = json.dumps(candidatos, ensure_ascii=False, indent=2)
 
     prompt = f"""Você recebeu uma lista de {len(candidatos)} categorias candidatas geradas de diferentes lotes de arquivos.
-Muitas podem ser duplicatas, variações do mesmo tema ou se sobrepor.
 
 {candidatos_txt}
 
 ---
 
 Sua tarefa:
-1. Mescle categorias APENAS quando forem essencialmente a mesma coisa (ex: "Política" e "Política Brasileira")
-2. Mantenha categorias distintas separadas — prefira granularidade a fusão excessiva
-3. O resultado final deve ter entre 20 e {FINAL_CATS} categorias únicas e bem definidas
-4. Para cada categoria consolidada, reescreva o propósito, pertence e nao_pertence de forma clara
+1. Mescle categorias APENAS quando forem IDÊNTICAS em essência (ex: "Política" e "Política-Geral" são a mesma)
+2. Categorias com temas distintos devem permanecer SEPARADAS — não funda "Saúde Mental" com "Psicologia", não funda "Jogos" com "Entretenimento"
+3. NÃO existe limite de quantidade — gere tantas categorias quantas o conteúdo justificar
+4. Para cada categoria, reescreva propósito, pertence e nao_pertence de forma precisa
 
 Responda APENAS com um array JSON final. Sem explicações, sem markdown.
 
@@ -202,7 +200,7 @@ Responda APENAS com um array JSON final. Sem explicações, sem markdown.
     except Exception as e:
         log(f"  ⚠ Erro na consolidação: {e}")
 
-    # Fallback: deduplica por nome normalizado sem LLM
+    # Fallback: deduplica por nome normalizado sem LLM (sem limite)
     vistos: set[str] = set()
     dedup: list[dict] = []
     for c in candidatos:
@@ -210,7 +208,7 @@ Responda APENAS com um array JSON final. Sem explicações, sem markdown.
         if chave not in vistos:
             vistos.add(chave)
             dedup.append(c)
-    return dedup[:FINAL_CATS]
+    return dedup
 
 
 # ── Criação de pastas ─────────────────────────────────────────────────────────
