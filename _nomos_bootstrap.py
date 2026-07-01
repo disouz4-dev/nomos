@@ -16,8 +16,12 @@ import argparse
 import json
 import re
 import requests
+import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
+import zipfile
 from pathlib import Path
 
 OLLAMA_URL   = "http://localhost:11434/api/generate"
@@ -254,6 +258,60 @@ def criar_akai_ito(dest: Path):
         log("  ✓ 00-Akai-Ito/_sobre_.md  [pasta fixa]")
 
 
+# ── Extração de arquivos compactados ──────────────────────────────────────────
+
+ARCHIVE_EXTS = (".zip", ".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")
+
+
+def _is_archive(path: Path) -> bool:
+    nome = path.name.lower()
+    return any(nome.endswith(ext) for ext in ARCHIVE_EXTS)
+
+
+def extrair_compactados(origem: Path) -> tuple[list[Path], Path | None]:
+    """
+    Varre origem buscando .md e arquivos compactados.
+    Extrai compactados para um diretório temporário.
+    Retorna (lista_de_mds, tmpdir_ou_None).
+    """
+    mds: list[Path] = [
+        f for f in origem.rglob("*.md")
+        if not f.name.startswith("_") and f.name not in SISTEMA
+    ]
+
+    archives = [f for f in origem.rglob("*") if f.is_file() and _is_archive(f)]
+
+    if not archives:
+        return mds, None
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="nomos_extract_"))
+    log(f"\n  📦 {len(archives)} arquivo(s) compactado(s) encontrado(s)")
+
+    for arc in archives:
+        dest_arc = tmpdir / arc.stem.replace(".tar", "")
+        dest_arc.mkdir(parents=True, exist_ok=True)
+        try:
+            nome_lower = arc.name.lower()
+            if nome_lower.endswith(".zip"):
+                with zipfile.ZipFile(arc) as zf:
+                    zf.extractall(dest_arc)
+            elif any(nome_lower.endswith(e) for e in (".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".tar")):
+                with tarfile.open(arc) as tf:
+                    tf.extractall(dest_arc)
+            else:
+                continue
+            extras = [
+                f for f in dest_arc.rglob("*.md")
+                if not f.name.startswith("_") and f.name not in SISTEMA
+            ]
+            mds.extend(extras)
+            log(f"    ✓ {arc.name}  →  {len(extras)} .md extraídos")
+        except Exception as e:
+            log(f"    ⚠ {arc.name}: {e}")
+
+    return mds, tmpdir
+
+
 # ── Hardware ───────────────────────────────────────────────────────────────────
 
 def detectar_batch_size() -> int:
@@ -292,13 +350,10 @@ def run(origem: Path, destino: Path):
     log("  Nomos Bootstrap — Classificação real e completa")
     log("=" * 60)
 
-    todos = [
-        f for f in origem.rglob("*.md")
-        if not f.name.startswith("_") and f.name not in SISTEMA
-    ]
+    todos, tmpdir = extrair_compactados(origem)
 
     if not todos:
-        log("  ✗ Nenhum arquivo .md encontrado na origem.")
+        log("  ✗ Nenhum arquivo .md encontrado na origem (incluindo compactados).")
         sys.exit(1)
 
     total = len(todos)
@@ -348,6 +403,9 @@ def run(origem: Path, destino: Path):
         pasta = destino / nome
         pasta.mkdir(parents=True, exist_ok=True)
         criar_sobre_md(pasta, cat)
+
+    if tmpdir and tmpdir.exists():
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
     log(f"\n{'=' * 60}")
     log(f"  Bootstrap concluído — {len(categorias) + 2} pastas criadas")
