@@ -658,13 +658,19 @@ async def _stream_tudo(origem: str, destino: str,
     yield emit("═" * 50)
 
     rodada = 1
-    _total_pend_cl = db_stats().get("total", 0)
+    primeira_rodada = True
+    _total_pend_cl = 0
     while not cancelado():
-        pendentes = db_stats().get("pendente", 0)
-        if pendentes == 0:
+        stats_cl = db_stats()
+        pendentes = stats_cl.get("pendente", 0)
+        total_cl  = stats_cl.get("total", 0)
+        # Sai apenas após pelo menos uma rodada e sem pendentes
+        if pendentes == 0 and not primeira_rodada:
             yield emit("✅ Classify concluído — sem pendentes.")
             yield f"event: fase-prog\ndata: classify:100\n\n"
             break
+        if _total_pend_cl == 0 and total_cl > 0:
+            _total_pend_cl = total_cl
         if _total_pend_cl > 0:
             concl = _total_pend_cl - pendentes
             pct_cl = round(concl / _total_pend_cl * 100)
@@ -674,6 +680,7 @@ async def _stream_tudo(origem: str, destino: str,
                "--origem", origem, "--destino", destino, "--lote", str(lote_classify)]
         async for chunk in _stream_cmd(cmd):
             yield chunk
+        primeira_rodada = False
         rodada += 1
         await asyncio.sleep(0.5)
 
