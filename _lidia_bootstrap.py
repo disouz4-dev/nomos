@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 """
-LÍDIA Bootstrap — Cria taxonomia cobrindo TODOS os arquivos.
+Nomos Bootstrap — Cria taxonomia a partir de TODOS os arquivos.
 
 Estratégia:
-  1. Processa todos os arquivos em lotes de BATCH_SIZE
-  2. Cada lote gera CATS_PER_BATCH categorias candidatas
-  3. Consolidação final remove duplicatas e produz a taxonomia definitiva
+  1. Lê TODOS os arquivos e acumula excerpts (sem chamar LLM ainda)
+  2. Com tudo lido, chama o LLM UMA VEZ para gerar a taxonomia completa
+     (se o volume for muito grande, extrai temas por grupo e consolida no final)
+  3. Cria as pastas SOMENTE após a taxonomia estar completa
 
 Uso:
     python _lidia_bootstrap.py --origem /path --destino /path
-    python _lidia_bootstrap.py  # pergunta interativamente
 """
 
 import argparse
 import json
-import os
-import random
 import re
 import requests
 import subprocess
@@ -24,49 +22,8 @@ from pathlib import Path
 
 OLLAMA_URL    = "http://localhost:11434/api/generate"
 OLLAMA_MODEL  = "gemma4:e4b"
-EXCERPT_CHARS  = 400   # chars por arquivo
-CATS_PER_BATCH = 8     # categorias candidatas por lote
-
-
-def detectar_batch_size() -> int:
-    """Calcula o lote ideal com base no hardware disponível."""
-    # Tenta ler VRAM disponível (nvidia)
-    try:
-        out = subprocess.check_output(
-            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
-            timeout=3, text=True
-        ).strip().splitlines()[0]
-        vram_free_mb = int(out.strip())
-        # gemma4:e4b usa ~4GB; com 8GB+ livres, lotes maiores são seguros
-        if vram_free_mb >= 6000:
-            return 80
-        elif vram_free_mb >= 3000:
-            return 50
-        else:
-            return 30
-    except Exception:
-        pass
-
-    # Fallback: RAM do sistema
-    try:
-        with open("/proc/meminfo") as f:
-            for line in f:
-                if line.startswith("MemAvailable"):
-                    ram_free_kb = int(line.split()[1])
-                    ram_free_gb = ram_free_kb / 1024 / 1024
-                    if ram_free_gb >= 12:
-                        return 60
-                    elif ram_free_gb >= 6:
-                        return 40
-                    else:
-                        return 25
-    except Exception:
-        pass
-
-    return 40  # default conservador
-
-
-BATCH_SIZE = detectar_batch_size()
+EXCERPT_CHARS = 80   # chars por arquivo para o resumo de conteúdo
+MAX_CHARS_PER_CALL = 36_000  # limite seguro por chamada LLM (contexto 32K tokens)
 
 SISTEMA = {
     "_sobre_.md", "POV.md", "_lidia_rules_compact.md",
@@ -83,53 +40,9 @@ def log(msg: str):
 
 def read_excerpt(path: Path) -> str:
     try:
-        return path.read_text(encoding="utf-8", errors="ignore")[:EXCERPT_CHARS]
+        return path.read_text(encoding="utf-8", errors="ignore")[:EXCERPT_CHARS].replace("\n", " ").strip()
     except Exception:
         return ""
-
-
-# ── Fase 1: candidatos por lote ───────────────────────────────────────────────
-
-def gerar_candidatos(excerpts: list[tuple[str, str]], lote_num: int, total_lotes: int) -> list[dict]:
-    amostras_txt = "\n\n".join(
-        f"=== {nome} ===\n{texto}"
-        for nome, texto in excerpts
-    )
-
-    prompt = f"""Você está analisando um lote de arquivos de um vault pessoal (lote {lote_num}/{total_lotes}).
-
-{amostras_txt}
-
----
-
-Com base nesses arquivos, identifique exatamente {CATS_PER_BATCH} temas distintos presentes no lote.
-Cada tema deve ser uma "gaveta" com natureza única.
-
-Responda APENAS com um array JSON. Sem explicações, sem markdown, sem texto extra.
-
-[
-  {{
-    "nome": "Nome-Da-Pasta",
-    "proposito": "Uma frase curta definindo o que esta pasta representa",
-    "pertence": "Tipo de conteúdo que vai aqui",
-    "nao_pertence": "O que NÃO vai aqui mesmo parecendo relacionado"
-  }}
-]"""
-
-    payload = {
-        "model": OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.2, "num_ctx": 16384}
-    }
-    try:
-        resp = requests.post(OLLAMA_URL, json=payload, timeout=120)
-        resp.raise_for_status()
-        raw = resp.json()["response"].strip()
-        return extrair_json(raw)
-    except Exception as e:
-        log(f"    ⚠ Lote {lote_num}: {e}")
-        return []
 
 
 def extrair_json(raw: str) -> list[dict]:
@@ -152,27 +65,58 @@ def extrair_json(raw: str) -> list[dict]:
     return []
 
 
-# ── Fase 2: consolidação ──────────────────────────────────────────────────────
+def _chamar_llm(prompt: str, timeout: int = 300) -> str:
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.15, "num_ctx": 32768}
+    }
+    resp = requests.post(OLLAMA_URL, json=payload, timeout=timeout)
+    resp.raise_for_status()
+    return resp.json()["response"].strip()
 
-def consolidar(candidatos: list[dict]) -> list[dict]:
-    if not candidatos:
-        return []
 
-    candidatos_txt = json.dumps(candidatos, ensure_ascii=False, indent=2)
+def extrair_temas_grupo(linhas: list[str], grupo: int, total_grupos: int) -> list[str]:
+    """Extrai lista de temas (nomes simples) de um grupo de arquivos — saída compacta."""
+    conteudo = "\n".join(linhas)
+    prompt = f"""Você está analisando um grupo de arquivos de um vault pessoal ({grupo}/{total_grupos}).
 
-    prompt = f"""Você recebeu uma lista de {len(candidatos)} categorias candidatas geradas de diferentes lotes de arquivos.
-
-{candidatos_txt}
+{conteudo}
 
 ---
 
-Sua tarefa:
-1. Mescle categorias APENAS quando forem IDÊNTICAS em essência (ex: "Política" e "Política-Geral" são a mesma)
-2. Categorias com temas distintos devem permanecer SEPARADAS — não funda "Saúde Mental" com "Psicologia", não funda "Jogos" com "Entretenimento"
-3. NÃO existe limite de quantidade — gere tantas categorias quantas o conteúdo justificar
-4. Para cada categoria, reescreva propósito, pertence e nao_pertence de forma precisa
+Liste os TEMAS DISTINTOS presentes nesses arquivos.
+Cada tema = uma palavra ou expressão curta (ex: "Saúde Mental", "Jogos", "Política").
+Não agrupe artificialmente — separe temas que são realmente diferentes.
+Sem explicações. Responda apenas com uma lista, um tema por linha."""
 
-Responda APENAS com um array JSON final. Sem explicações, sem markdown.
+    try:
+        raw = _chamar_llm(prompt, timeout=120)
+        temas = [l.strip().lstrip("-*•123456789. ") for l in raw.splitlines() if l.strip()]
+        return [t for t in temas if t]
+    except Exception as e:
+        log(f"    ⚠ Grupo {grupo}: {e}")
+        return []
+
+
+def gerar_taxonomia_completa(linhas_todas: list[str]) -> list[dict]:
+    """Gera taxonomia final com todos os excerpts em uma única chamada LLM."""
+    conteudo = "\n".join(linhas_todas)
+    prompt = f"""Você está analisando {len(linhas_todas)} arquivos de um vault pessoal.
+
+{conteudo}
+
+---
+
+Analise TODOS os arquivos acima e gere a taxonomia completa de pastas para organizá-los.
+Regras:
+- Crie tantas categorias quantas forem necessárias — SEM limite de quantidade
+- Não funda temas distintos: "Saúde Mental" e "Psicologia Clínica" são diferentes; "Jogos" e "Entretenimento" são diferentes
+- Agrupe APENAS categorias que são literalmente a mesma coisa com nome diferente
+- Cada pasta deve representar um volume real de arquivos
+
+Responda APENAS com um array JSON. Sem explicações, sem markdown.
 
 [
   {{
@@ -183,35 +127,57 @@ Responda APENAS com um array JSON final. Sem explicações, sem markdown.
   }}
 ]"""
 
-    payload = {
-        "model": OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": 0.1, "num_ctx": 32768}
-    }
-    log(f"\n  ⟳ Consolidando {len(candidatos)} candidatos em taxonomia final...")
+    log("  ⟳ Gerando taxonomia a partir de todos os arquivos...")
     try:
-        resp = requests.post(OLLAMA_URL, json=payload, timeout=180)
-        resp.raise_for_status()
-        raw = resp.json()["response"].strip()
+        raw = _chamar_llm(prompt, timeout=300)
+        resultado = extrair_json(raw)
+        if resultado:
+            return resultado
+        log("  ⚠ LLM não retornou JSON válido.")
+    except Exception as e:
+        log(f"  ⚠ Erro: {e}")
+    return []
+
+
+def gerar_taxonomia_via_temas(temas_todos: list[str]) -> list[dict]:
+    """Gera taxonomia a partir de lista de temas extraídos (quando conteúdo é muito grande)."""
+    temas_txt = "\n".join(f"- {t}" for t in temas_todos)
+    prompt = f"""Você recebeu uma lista de temas identificados em um vault pessoal com muitos arquivos:
+
+{temas_txt}
+
+---
+
+Com base nesses temas, gere a taxonomia completa de pastas.
+Regras:
+- Crie tantas categorias quantas forem necessárias — SEM limite de quantidade
+- Mescle APENAS temas que são literalmente o mesmo assunto com nome diferente
+- Mantenha temas distintos separados — não generalize demais
+- Para cada pasta, defina propósito, pertence e nao_pertence
+
+Responda APENAS com um array JSON. Sem explicações, sem markdown.
+
+[
+  {{
+    "nome": "Nome-Da-Pasta",
+    "proposito": "Uma frase curta definindo o que esta pasta representa",
+    "pertence": "Tipo de conteúdo que vai aqui",
+    "nao_pertence": "O que NÃO vai aqui mesmo parecendo relacionado"
+  }}
+]"""
+
+    log("  ⟳ Gerando taxonomia a partir dos temas consolidados...")
+    try:
+        raw = _chamar_llm(prompt, timeout=300)
         resultado = extrair_json(raw)
         if resultado:
             return resultado
     except Exception as e:
-        log(f"  ⚠ Erro na consolidação: {e}")
-
-    # Fallback: deduplica por nome normalizado sem LLM (sem limite)
-    vistos: set[str] = set()
-    dedup: list[dict] = []
-    for c in candidatos:
-        chave = re.sub(r"[^a-z]", "", c.get("nome", "").lower())
-        if chave not in vistos:
-            vistos.add(chave)
-            dedup.append(c)
-    return dedup
+        log(f"  ⚠ Erro: {e}")
+    return []
 
 
-# ── Criação de pastas ─────────────────────────────────────────────────────────
+# ── Criação de pastas ──────────────────────────────────────────────────────────
 
 def criar_sobre_md(pasta: Path, cat: dict):
     sobre = pasta / "_sobre_.md"
@@ -229,18 +195,18 @@ def criar_sobre_md(pasta: Path, cat: dict):
 
 
 def criar_lore_geral(dest: Path):
-    pasta = dest / "35-Lore-Geral"
+    pasta = dest / "Lore-Geral"
     pasta.mkdir(parents=True, exist_ok=True)
     sobre = pasta / "_sobre_.md"
     if not sobre.exists():
         sobre.write_text(
-            "# 35-Lore-Geral\n\n"
+            "# Lore-Geral\n\n"
             "## Propósito\n\nRepositório para arquivos com domínio ambíguo.\n\n"
             "## O que pertence aqui\n\nArquivos sem categoria clara identificável.\n\n"
             "## O que não pertence aqui\n\nArquivos com domínio claramente identificado.\n",
             encoding="utf-8"
         )
-        log("  ✓ 35-Lore-Geral/_sobre_.md")
+        log("  ✓ Lore-Geral/_sobre_.md")
 
 
 def criar_akai_ito(dest: Path):
@@ -262,11 +228,43 @@ def criar_akai_ito(dest: Path):
         log("  ✓ 00-Akai-Ito/_sobre_.md  [pasta fixa]")
 
 
-# ── Pipeline principal ────────────────────────────────────────────────────────
+# ── Pipeline principal ─────────────────────────────────────────────────────────
+
+def detectar_batch_size() -> int:
+    try:
+        out = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"],
+            timeout=3, text=True
+        ).strip().splitlines()[0]
+        vram_free_mb = int(out.strip())
+        if vram_free_mb >= 6000:
+            return 80
+        elif vram_free_mb >= 3000:
+            return 50
+        else:
+            return 30
+    except Exception:
+        pass
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemAvailable"):
+                    ram_free_kb = int(line.split()[1])
+                    ram_free_gb = ram_free_kb / 1024 / 1024
+                    if ram_free_gb >= 12:
+                        return 60
+                    elif ram_free_gb >= 6:
+                        return 40
+                    else:
+                        return 25
+    except Exception:
+        pass
+    return 40
+
 
 def run(origem: Path, destino: Path):
     log("=" * 60)
-    log("  LÍDIA Bootstrap — Cobertura total do vault")
+    log("  Nomos Bootstrap — Taxonomia total do vault")
     log("=" * 60)
 
     todos = [
@@ -278,37 +276,63 @@ def run(origem: Path, destino: Path):
         log("  ✗ Nenhum arquivo .md encontrado na origem.")
         sys.exit(1)
 
-    random.shuffle(todos)
     total = len(todos)
-    lotes = [todos[i:i + BATCH_SIZE] for i in range(0, total, BATCH_SIZE)]
-    total_lotes = len(lotes)
-
     log(f"\n  {total} arquivos encontrados")
-    log(f"  Lote automático: {BATCH_SIZE} arquivos/lote (detectado pelo hardware)")
-    log(f"  {total_lotes} lotes no total · {CATS_PER_BATCH} candidatos por lote → consolidação final\n")
+    log(f"  Fase 1/2: lendo todos os arquivos...\n")
 
-    todos_candidatos: list[dict] = []
+    # ── FASE 1: Lê TODOS os arquivos, acumula excerpts ─────────────────────────
+    BATCH_RD = detectar_batch_size()
+    linhas: list[str] = []
+    for i, f in enumerate(todos):
+        excerpt = read_excerpt(f)
+        linhas.append(f"[{f.name}] {excerpt}")
+        if (i + 1) % BATCH_RD == 0 or (i + 1) == total:
+            log(f"  [{i + 1:04d}/{total:04d}] lidos...")
 
-    for i, lote in enumerate(lotes, 1):
-        log(f"  [{i:02d}/{total_lotes}] Analisando {len(lote)} arquivos...")
-        excerpts = [(f.name, read_excerpt(f)) for f in lote]
-        candidatos = gerar_candidatos(excerpts, i, total_lotes)
-        todos_candidatos.extend(candidatos)
-        log(f"         → {len(candidatos)} candidatos  (acumulado: {len(todos_candidatos)})")
+    log(f"\n  ✓ {total} arquivos lidos")
 
-    if not todos_candidatos:
-        log("\n  ✗ Nenhum candidato gerado. Verifique o Ollama.")
-        sys.exit(1)
+    # ── FASE 2: Taxonomia — uma chamada ou duas se o volume for grande ─────────
+    total_chars = sum(len(l) for l in linhas)
+    log(f"  Volume de conteúdo: {total_chars:,} chars")
+    log(f"\n  Fase 2/2: gerando taxonomia completa...\n")
 
-    categorias = consolidar(todos_candidatos)
+    if total_chars <= MAX_CHARS_PER_CALL:
+        # Tudo cabe em uma chamada — taxonomia direta
+        categorias = gerar_taxonomia_completa(linhas)
+    else:
+        # Conteúdo grande: extrai temas por grupo, depois uma taxonomia dos temas
+        tamanho_grupo = MAX_CHARS_PER_CALL // (EXCERPT_CHARS + 60)
+        grupos = [linhas[i:i + tamanho_grupo] for i in range(0, total, tamanho_grupo)]
+        total_grupos = len(grupos)
+        log(f"  Volume grande — extraindo temas em {total_grupos} grupos antes de taxonomizar\n")
+
+        temas_todos: list[str] = []
+        for gi, grupo in enumerate(grupos, 1):
+            log(f"  [{gi:02d}/{total_grupos}] Extraindo temas de {len(grupo)} arquivos...")
+            temas = extrair_temas_grupo(grupo, gi, total_grupos)
+            temas_todos.extend(temas)
+            log(f"         → {len(temas)} temas  (acumulado: {len(temas_todos)})")
+
+        # Remove duplicatas óbvias por normalização
+        vistos: set[str] = set()
+        temas_unicos: list[str] = []
+        for t in temas_todos:
+            chave = re.sub(r"[^a-z]", "", t.lower())
+            if chave not in vistos:
+                vistos.add(chave)
+                temas_unicos.append(t)
+
+        log(f"\n  {len(temas_unicos)} temas únicos após dedup básico")
+        categorias = gerar_taxonomia_via_temas(temas_unicos)
 
     if not categorias:
-        log("\n  ✗ Consolidação falhou.")
+        log("\n  ✗ Taxonomia falhou. Verifique o Ollama.")
         sys.exit(1)
 
-    log(f"  ✓ {len(categorias)} categorias na taxonomia final\n")
+    log(f"\n  ✓ {len(categorias)} categorias geradas\n")
     log("  ─── Taxonomia aprovada. Criando pastas agora... ───\n")
 
+    # ── FASE 3: Cria pastas ────────────────────────────────────────────────────
     destino.mkdir(parents=True, exist_ok=True)
     criar_akai_ito(destino)
     criar_lore_geral(destino)
@@ -317,25 +341,23 @@ def run(origem: Path, destino: Path):
         nome = cat.get("nome", "").strip()
         if not nome:
             continue
-        # Prefixo numérico para ordenação, pula o 35 reservado pro Lore
-        prefixo = i if i < 35 else i + 1
-        pasta = destino / f"{prefixo:02d}-{nome}"
+        pasta = destino / nome
         pasta.mkdir(parents=True, exist_ok=True)
         criar_sobre_md(pasta, cat)
 
     log(f"\n{'=' * 60}")
-    log(f"  Bootstrap concluído — {len(categorias) + 1} pastas criadas")
+    log(f"  Bootstrap concluído — {len(categorias) + 2} pastas criadas")
     log(f"  Cobertura: {total} arquivos analisados (100%)")
-    log(f"  Próximo: python _lidia_embed_classify.py")
+    log(f"  Próximo: Classify")
     log("=" * 60)
 
 
 def main():
     global OLLAMA_MODEL
-    parser = argparse.ArgumentParser(description="LÍDIA Bootstrap")
+    parser = argparse.ArgumentParser(description="Nomos Bootstrap")
     parser.add_argument("--origem",  help="Pasta com arquivos brutos")
     parser.add_argument("--destino", help="Pasta de destino organizada")
-    parser.add_argument("--modelo",  help="Modelo Ollama a usar (ex: gemma3:4b)")
+    parser.add_argument("--modelo",  help="Modelo Ollama a usar")
     args = parser.parse_args()
 
     if args.modelo:
